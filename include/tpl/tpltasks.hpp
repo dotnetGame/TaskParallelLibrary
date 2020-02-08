@@ -5,6 +5,8 @@
 #include <memory>
 #include <type_traits>
 
+#include "tplexcept.hpp"
+
 namespace tpl
 {
     enum task_status
@@ -32,6 +34,11 @@ namespace tpl
 
     };
 
+    class TaskCollection
+    {
+
+    };
+
     struct task_impl_base
     {
         enum TaskInternalState
@@ -54,13 +61,54 @@ namespace tpl
 
         task_status wait()
         {
-            
+
         }
 
+        bool isCreated() { return (task_state_ == Created); }
+
+        bool isStarted() { return (task_state_ == Started); }
+
+        bool isPendingCancel() { return (task_state_ == PendingCancel); }
+
+        bool isCompleted() { return (task_state_ == Completed); }
+
+        bool isCanceled() { return (task_state_ == Canceled); }
+
+        // bool hasUserException() { return static_cast<bool>(_M_exceptionHolder); }
+    private:
+        TaskInternalState task_state_;
+    };
+
+    template<typename ValueType>
+    struct ResultHolder
+    {
+        ResultHolder() = default;
+
+        void set(const ValueType& t)
+        {
+            result = t;
+        }
+
+        ValueType get()
+        {
+            return result;
+        }
+
+        ValueType result;
     };
 
     template<typename ReturnType>
     struct task_impl : public task_impl_base
+    {
+        bool isDone() { return isCompleted() || isCanceled(); }
+
+        ReturnType getResult() { return result_.get(); }
+    private:
+        TaskCollection task_collection_;
+        ResultHolder<ReturnType> result_;
+    };
+
+    class task_collection
     {
 
     };
@@ -115,19 +163,21 @@ namespace tpl
 
         task_status wait()
         {
-            if (impl_)
-            {
-                return impl_.wait();
-            }
-            else
-            {
+            if (!impl_)
                 throw std::runtime_error("Task implement no found");
-            }
+            return impl_.wait();
         }
 
         ReturnType get()
         {
-            return ReturnType{};
+            if (!impl_)
+                throw std::runtime_error("Task implement no found");
+            if (impl_->wait() == canceled)
+            {
+                throw task_canceled();
+            }
+
+            return impl_->getResult();
         }
 
         typename task_ptr<ReturnType>::PtrType impl_;
